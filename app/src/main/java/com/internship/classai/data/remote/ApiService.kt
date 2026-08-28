@@ -1,0 +1,34 @@
+package com.internship.classai.data.remote
+
+import com.internship.classai.data.model.ClassItem
+import com.internship.classai.data.model.Due
+import com.internship.classai.data.model.PaymentRequest
+import com.internship.classai.data.model.PaymentResponse
+import com.internship.classai.data.model.SectionItem
+import com.internship.classai.data.model.Student
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Path
+
+interface ApiService {
+
+    @GET("students")
+    suspend fun getStudents(): List<Student>
+
+    @GET("classes")
+    suspend fun getClasses(): List<ClassItem>
+
+    @GET("sections")
+    suspend fun getSections(): List<SectionItem>
+
+    @GET("dues/{student_id}")
+    suspend fun getStudentDues(
+        @Path("student_id") studentId: Int
+    ): List<Due>
+
+    @POST("payments")
+    suspend fun makePayment(
+        @Body request: PaymentRequest
+    ): PaymentResponse
+}
