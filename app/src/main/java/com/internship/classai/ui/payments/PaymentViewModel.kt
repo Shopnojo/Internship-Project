@@ -171,10 +171,14 @@ class PaymentViewModel : ViewModel() {
     // --------------------------------------------------
     // SELECTED DUES TOTAL
     // --------------------------------------------------
+    //
+    // Uses netAmount directly from the database.
+    // No Android-side penalty/waiver calculation.
+    // --------------------------------------------------
 
     val selectedDuesTotal: Int
         get() = selectedDues.sumOf {
-            it.totalAmount
+            it.netAmount
         }
 
     // --------------------------------------------------
@@ -449,6 +453,12 @@ class PaymentViewModel : ViewModel() {
 
         return try {
 
+            // Generate the transaction number ONCE.
+            // This exact value is sent to the database
+            // and subsequently used as the receipt number.
+            val transactionNo =
+                "TXN-${System.currentTimeMillis()}"
+
             val response =
                 repository.makePayment(
 
@@ -458,7 +468,7 @@ class PaymentViewModel : ViewModel() {
                         paymentMethod,
 
                     transactionNo =
-                        "TXN-${System.currentTimeMillis()}",
+                        transactionNo,
 
                     remarks =
                         remarks
@@ -469,14 +479,49 @@ class PaymentViewModel : ViewModel() {
                 return false
             }
 
+            // The backend must return the same transaction_no
+            // that was stored in payment_entries.
+            val returnedTransactionNo =
+                response.transaction_no
+                    ?: throw IllegalStateException(
+                        "Backend did not return transaction_no"
+                    )
+
+            // All financial values come from FastAPI,
+            // which gets them from payment_entries.
+            val amount =
+                response.amount
+                    ?: throw IllegalStateException(
+                        "Backend did not return amount"
+                    )
+
+            val penalty =
+                response.penalty
+                    ?: throw IllegalStateException(
+                        "Backend did not return penalty"
+                    )
+
+            val waiver =
+                response.waiver
+                    ?: throw IllegalStateException(
+                        "Backend did not return waiver"
+                    )
+
+            val netAmount =
+                response.net_amount
+                    ?: throw IllegalStateException(
+                        "Backend did not return net_amount"
+                    )
+
             lastPayment =
                 PaymentRecord(
 
+                    // Receipt number is EXACTLY the transaction number.
                     receiptNumber =
-                        "RCP-${System.currentTimeMillis()}",
+                        returnedTransactionNo,
 
                     transactionId =
-                        "TXN-${System.currentTimeMillis()}",
+                        returnedTransactionNo,
 
                     studentId =
                         student.id,
@@ -494,7 +539,16 @@ class PaymentViewModel : ViewModel() {
                         due.month,
 
                     amountPaid =
-                        due.totalAmount,
+                        amount,
+
+                    penalty =
+                        penalty,
+
+                    waiver =
+                        waiver,
+
+                    netAmount =
+                        netAmount,
 
                     paymentMethod =
                         paymentMethod,

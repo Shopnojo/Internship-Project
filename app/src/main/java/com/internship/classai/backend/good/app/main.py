@@ -20,12 +20,16 @@ def make_payment(payment: PaymentRequest):
     connection = get_db_connection()
     cursor = connection.cursor(dictionary=True)
 
-    # Check that the due exists and is currently unpaid
+    # Get the unpaid due and all authoritative financial/payment values
     cursor.execute("""
         SELECT
             id,
             student_id,
-            net_amount
+            amount,
+            penalty,
+            waiver,
+            net_amount,
+            transaction_no
         FROM payment_entries
         WHERE id = %s
           AND is_paid = 0
@@ -80,11 +84,19 @@ def make_payment(payment: PaymentRequest):
         "message": "Payment recorded successfully",
         "due_id": payment.due_id,
         "student_id": due["student_id"],
-        "amount": due["net_amount"],
+
+        # Exact transaction number supplied by Android
+        "transaction_no": payment.transaction_no,
+
+        # Values directly from payment_entries
+        "amount": due["amount"],
+        "penalty": due["penalty"],
+        "waiver": due["waiver"],
+        "net_amount": due["net_amount"],
+
         "payment_date": str(today),
         "payment_mode": payment.payment_mode
     }
-
 @app.get("/")
 def root():
     return {"message": "ClassAI backend is running"}
@@ -194,7 +206,8 @@ def get_student_dues(student_id: int):
             DATE_FORMAT(due_date, '%Y-%m-%d') AS dueDate,
             amount AS payableAmount,
             penalty,
-            waiver
+            waiver,
+            net_amount AS netAmount
         FROM payment_entries
         WHERE student_id = %s
           AND payment_date IS NULL

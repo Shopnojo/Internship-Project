@@ -1,7 +1,6 @@
 package com.internship.classai.data.model
 
 data class PaymentRecord(
-
     val receiptNumber: String,
 
     val transactionId: String,
@@ -18,6 +17,12 @@ data class PaymentRecord(
 
     val amountPaid: Int,
 
+    val penalty: Int,
+
+    val waiver: Int,
+
+    val netAmount: Int,
+
     val paymentMethod: String,
 
     val paymentDate: String,
@@ -27,5 +32,4 @@ data class PaymentRecord(
     val collectedBy: String,
 
     val timestamp: Long
-
 )

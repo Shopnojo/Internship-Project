@@ -1,7 +1,6 @@
 package com.internship.classai.ui.components
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -134,15 +133,38 @@ fun ReceiptView(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            ReceiptRow("Receipt No.", payment.receiptNumber)
-            ReceiptRow("Date", payment.paymentDate)
+            // This is the exact transaction_no stored in the DB.
+            ReceiptRow(
+                "Receipt No.",
+                payment.receiptNumber
+            )
+
+            ReceiptRow(
+                "Date",
+                payment.paymentDate
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            ReceiptRow("Student Name", payment.studentName)
-            ReceiptRow("Student ID", payment.studentId.toString())
-            ReceiptRow("Class", payment.className)
-            ReceiptRow("Section", payment.sectionName)
+            ReceiptRow(
+                "Student Name",
+                payment.studentName
+            )
+
+            ReceiptRow(
+                "Student ID",
+                payment.studentId.toString()
+            )
+
+            ReceiptRow(
+                "Class",
+                payment.className
+            )
+
+            ReceiptRow(
+                "Section",
+                payment.sectionName
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -150,10 +172,28 @@ fun ReceiptView(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            ReceiptRow("Fee Month", payment.month)
-            ReceiptRow("Payable", "₹${payment.amountPaid}")
-            ReceiptRow("Penalty", "₹0")
-            ReceiptRow("Waiver", "₹0")
+            ReceiptRow(
+                "Fee Month",
+                payment.month
+            )
+
+            // Directly from payment_entries.amount
+            ReceiptRow(
+                "Payable",
+                "₹${payment.amountPaid}"
+            )
+
+            // Directly from payment_entries.penalty
+            ReceiptRow(
+                "Penalty",
+                "₹${payment.penalty}"
+            )
+
+            // Directly from payment_entries.waiver
+            ReceiptRow(
+                "Waiver",
+                "₹${payment.waiver}"
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -173,9 +213,11 @@ fun ReceiptView(
 
             )
 
+            // Directly from payment_entries.net_amount.
+            // No Android-side calculation.
             Text(
 
-                text = "₹${payment.amountPaid}",
+                text = "₹${payment.netAmount}",
 
                 fontWeight = FontWeight.ExtraBold,
 
