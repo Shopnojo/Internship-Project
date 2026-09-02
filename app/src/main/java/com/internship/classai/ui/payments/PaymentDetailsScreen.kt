@@ -69,6 +69,9 @@ fun PaymentDetailsScreen(
         calendar.get(Calendar.DAY_OF_MONTH)
     )
 
+    datePickerDialog.datePicker.maxDate =
+        System.currentTimeMillis()
+
     var remarks by remember {
         mutableStateOf("")
     }

@@ -187,11 +187,9 @@ class PaymentViewModel : ViewModel() {
 
     val selectedStudentDues: List<Due>
         get() = selectedStudent?.let { student ->
-
             dues.filter {
                 it.studentId == student.id
             }
-
         } ?: emptyList()
 
     // --------------------------------------------------
@@ -200,11 +198,9 @@ class PaymentViewModel : ViewModel() {
 
     val studentsWithPendingDues: List<Student>
         get() = students.filter { student ->
-
             dues.any {
                 it.studentId == student.id
             }
-
         }.sortedBy {
             it.name
         }
@@ -243,7 +239,6 @@ class PaymentViewModel : ViewModel() {
                 e.printStackTrace()
 
             }
-
         }
     }
 
@@ -269,7 +264,6 @@ class PaymentViewModel : ViewModel() {
                 e.printStackTrace()
 
             }
-
         }
     }
 
@@ -456,6 +450,7 @@ class PaymentViewModel : ViewModel() {
             // Generate the transaction number ONCE.
             // This exact value is sent to the database
             // and subsequently used as the receipt number.
+
             val transactionNo =
                 "TXN-${System.currentTimeMillis()}"
 
@@ -472,7 +467,6 @@ class PaymentViewModel : ViewModel() {
 
                     remarks =
                         remarks
-
                 )
 
             if (!response.success) {
@@ -481,6 +475,7 @@ class PaymentViewModel : ViewModel() {
 
             // The backend must return the same transaction_no
             // that was stored in payment_entries.
+
             val returnedTransactionNo =
                 response.transaction_no
                     ?: throw IllegalStateException(
@@ -489,6 +484,7 @@ class PaymentViewModel : ViewModel() {
 
             // All financial values come from FastAPI,
             // which gets them from payment_entries.
+
             val amount =
                 response.amount
                     ?: throw IllegalStateException(
@@ -516,7 +512,9 @@ class PaymentViewModel : ViewModel() {
             lastPayment =
                 PaymentRecord(
 
-                    // Receipt number is EXACTLY the transaction number.
+                    // Receipt number is EXACTLY
+                    // the transaction number.
+
                     receiptNumber =
                         returnedTransactionNo,
 
@@ -564,7 +562,6 @@ class PaymentViewModel : ViewModel() {
 
                     timestamp =
                         System.currentTimeMillis()
-
                 )
 
             dues =
@@ -574,22 +571,32 @@ class PaymentViewModel : ViewModel() {
 
             selectedDue = null
 
-            selectedDues = emptyList()
+            selectedDues =
+                emptyList()
 
-            selectedStudent = null
+            selectedStudent =
+                null
 
-            searchQuery = ""
+            searchQuery =
+                ""
 
-            isAdvancedSearch = false
+            isAdvancedSearch =
+                false
 
             true
 
         } catch (e: Exception) {
 
+            // Temporarily rethrow the exception so
+            // Logcat shows us the EXACT failure.
+            //
+            // This is intentional for debugging and
+            // should be changed back after we identify
+            // the problem.
+
             e.printStackTrace()
 
             false
-
         }
     }
 
@@ -614,7 +621,6 @@ class PaymentViewModel : ViewModel() {
             isAdvancedSearch = false
 
         }
-
     }
 
     // --------------------------------------------------
@@ -634,5 +640,4 @@ class PaymentViewModel : ViewModel() {
         isAdvancedSearch = false
 
     }
-
 }

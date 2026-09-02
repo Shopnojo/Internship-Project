@@ -4,8 +4,8 @@ from database import get_db_connection
 from datetime import date
 from pydantic import BaseModel
 from typing import Optional
-app = FastAPI()
 
+app = FastAPI()
 
 
 class PaymentRequest(BaseModel):
@@ -13,6 +13,7 @@ class PaymentRequest(BaseModel):
     payment_mode: str
     transaction_no: Optional[str] = None
     remarks: Optional[str] = None
+
 
 @app.post("/payments")
 def make_payment(payment: PaymentRequest):
@@ -26,8 +27,8 @@ def make_payment(payment: PaymentRequest):
             id,
             student_id,
             amount,
-            penalty,
-            waiver,
+            COALESCE(penalty, 0) AS penalty,
+            COALESCE(waiver, 0) AS waiver,
             net_amount,
             transaction_no
         FROM payment_entries
@@ -89,6 +90,7 @@ def make_payment(payment: PaymentRequest):
         "transaction_no": payment.transaction_no,
 
         # Values directly from payment_entries
+        # NULL penalty/waiver are normalized to 0
         "amount": due["amount"],
         "penalty": due["penalty"],
         "waiver": due["waiver"],
@@ -97,9 +99,13 @@ def make_payment(payment: PaymentRequest):
         "payment_date": str(today),
         "payment_mode": payment.payment_mode
     }
+
+
 @app.get("/")
 def root():
-    return {"message": "ClassAI backend is running"}
+    return {
+        "message": "ClassAI backend is running"
+    }
 
 
 @app.get("/test-db")
@@ -144,7 +150,8 @@ def get_students():
     connection.close()
 
     return students
-    return students
+
+
 @app.get("/classes")
 def get_classes():
 
@@ -167,6 +174,7 @@ def get_classes():
     connection.close()
 
     return classes
+
 
 @app.get("/sections")
 def get_sections():
@@ -192,6 +200,7 @@ def get_sections():
 
     return sections
 
+
 @app.get("/dues/{student_id}")
 def get_student_dues(student_id: int):
 
@@ -205,8 +214,8 @@ def get_student_dues(student_id: int):
             DATE_FORMAT(due_date, '%M-%Y') AS month,
             DATE_FORMAT(due_date, '%Y-%m-%d') AS dueDate,
             amount AS payableAmount,
-            penalty,
-            waiver,
+            COALESCE(penalty, 0) AS penalty,
+            COALESCE(waiver, 0) AS waiver,
             net_amount AS netAmount
         FROM payment_entries
         WHERE student_id = %s
