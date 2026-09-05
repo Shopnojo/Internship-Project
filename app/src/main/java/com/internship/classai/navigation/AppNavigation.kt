@@ -2,9 +2,13 @@ package com.internship.classai.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.internship.classai.ui.login.LoginScreen
+import com.internship.classai.ui.login.LoginTypeScreen
 import com.internship.classai.ui.payments.OfflinePaymentScreen
 import com.internship.classai.ui.payments.PaymentDetailsScreen
 import com.internship.classai.ui.payments.PaymentSuccessScreen
@@ -19,6 +23,10 @@ import com.internship.classai.ui.settings.ChangePasswordScreen
 
 object Routes {
 
+    const val LOGIN_TYPE = "login_type"
+
+    const val LOGIN = "login"
+
     const val PAYMENTS = "payments"
 
     const val PAY_NOW = "pay_now"
@@ -27,9 +35,7 @@ object Routes {
 
     const val PAYMENT_SUCCESS = "payment_success"
 
-
     const val STUDENTS = "students"
-
 
     const val SETTINGS = "settings"
 
@@ -44,7 +50,6 @@ object Routes {
     const val PAYMENT_DETAILS = "payment_details"
 
     const val RECEIPT_PREVIEW = "receipt_preview"
-
 }
 
 @Composable
@@ -55,23 +60,38 @@ fun AppNavigation() {
     val paymentViewModel: PaymentViewModel = viewModel()
 
     NavHost(
-
         navController = navController,
-
-        startDestination = Routes.STUDENTS
-
+        startDestination = Routes.LOGIN_TYPE
     ) {
+
+        composable(Routes.LOGIN_TYPE) {
+
+            LoginTypeScreen(
+                navController = navController
+            )
+        }
+
+        composable(
+            route = "${Routes.LOGIN}?type={type}",
+            arguments = listOf(
+                navArgument("type") {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+
+            LoginScreen(
+                navController = navController,
+                backStackEntry = backStackEntry
+            )
+        }
 
         composable(Routes.PAYMENTS) {
 
             OfflinePaymentScreen(
-
                 navController = navController,
-
                 paymentViewModel = paymentViewModel
-
             )
-
         }
 
         composable(Routes.PAYMENT_DETAILS) {
@@ -81,40 +101,26 @@ fun AppNavigation() {
             if (student != null && paymentViewModel.selectedDues.isNotEmpty()) {
 
                 PaymentDetailsScreen(
-
                     navController = navController,
-
                     student = student,
-
                     paymentViewModel = paymentViewModel
-
                 )
-
             }
-
         }
 
         composable(Routes.PAYMENT_SUCCESS) {
 
             PaymentSuccessScreen(
-
                 navController = navController
-
             )
-
         }
-
 
         composable(Routes.RECEIPT_PREVIEW) {
 
             ReceiptPreviewScreen(
-
                 navController = navController,
-
                 paymentViewModel = paymentViewModel
-
             )
-
         }
 
         composable(Routes.STUDENTS) {
@@ -123,17 +129,13 @@ fun AppNavigation() {
                 navController = navController,
                 paymentViewModel = paymentViewModel
             )
-
         }
 
         composable(Routes.SETTINGS) {
 
             SettingsScreen(
-
                 navController = navController
-
             )
-
         }
 
         composable(Routes.ABOUT_CLASS_AI) {
@@ -141,7 +143,6 @@ fun AppNavigation() {
             AboutClassAIScreen(
                 navController = navController
             )
-
         }
 
         composable(Routes.HELP_SUPPORT) {
@@ -149,7 +150,6 @@ fun AppNavigation() {
             HelpSupportScreen(
                 navController = navController
             )
-
         }
 
         composable(Routes.PROFILE) {
@@ -157,7 +157,6 @@ fun AppNavigation() {
             ProfileScreen(
                 navController = navController
             )
-
         }
 
         composable(Routes.CHANGE_PASSWORD) {
@@ -165,9 +164,6 @@ fun AppNavigation() {
             ChangePasswordScreen(
                 navController = navController
             )
-
         }
-
     }
-
 }
