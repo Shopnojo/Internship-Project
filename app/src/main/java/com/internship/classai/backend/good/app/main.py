@@ -229,3 +229,34 @@ def get_student_dues(student_id: int):
     connection.close()
 
     return dues
+
+
+# ---------------------------------------------------------------------------
+# School / Employee management
+# ---------------------------------------------------------------------------
+
+@app.get("/schools")
+def get_schools():
+    """Return schools for the Admin employee-management UI.
+
+    Passwords and employee data are intentionally not involved here.
+    The Android app should display school_name and retain id as the value.
+    """
+
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT
+                id,
+                school_name AS schoolName,
+                is_active AS isActive
+            FROM school_master
+            ORDER BY school_name, id
+        """)
+
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        connection.close()
