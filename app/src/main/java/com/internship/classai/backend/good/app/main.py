@@ -1,3 +1,6 @@
+import hashlib
+import secrets
+
 from fastapi import FastAPI
 from database import get_db_connection
 
@@ -13,6 +16,14 @@ class PaymentRequest(BaseModel):
     payment_mode: str
     transaction_no: Optional[str] = None
     remarks: Optional[str] = None
+
+
+class EmployeeCreate(BaseModel):
+    schoolId: int
+    fullName: str
+    mobile: str
+    userId: str
+    password: str
 
 
 @app.post("/payments")
@@ -237,11 +248,6 @@ def get_student_dues(student_id: int):
 
 @app.get("/schools")
 def get_schools():
-    """Return schools for the Admin employee-management UI.
-
-    Passwords and employee data are intentionally not involved here.
-    The Android app should display school_name and retain id as the value.
-    """
 
     connection = get_db_connection()
     cursor = connection.cursor(dictionary=True)
@@ -257,6 +263,147 @@ def get_schools():
         """)
 
         return cursor.fetchall()
+
+    finally:
+        cursor.close()
+        connection.close()
+
+
+@app.post("/employees")
+def create_employee(employee: EmployeeCreate):
+
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        # Make sure the selected school exists and is active.
+        cursor.execute("""
+            SELECT
+                id,
+                is_active
+            FROM school_master
+            WHERE id = %s
+        """, (employee.schoolId,))
+
+        school = cursor.fetchone()
+
+        if not school:
+            return {
+                "success": False,
+                "message": "School not found"
+            }
+
+        if int(school["is_active"]) != 1:
+            return {
+                "success": False,
+                "message": "Selected school is inactive"
+            }
+
+        # User ID must be unique among employees.
+        cursor.execute("""
+            SELECT id
+            FROM user_accountant
+            WHERE user_id = %s
+            LIMIT 1
+        """, (employee.userId,))
+
+        existing_employee = cursor.fetchone()
+
+        if existing_employee:
+            return {
+                "success": False,
+                "message": "Employee User ID already exists"
+            }
+
+        # Generate a random salt and hash the password.
+        salt = secrets.token_bytes(16)
+
+        password_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            employee.password.encode("utf-8"),
+            salt,
+            100000
+        )
+
+        stored_password = (
+            "pbkdf2_sha256$100000$"
+            + salt.hex()
+            + "$"
+            + password_hash.hex()
+        )
+
+        cursor.execute("""
+            INSERT INTO user_accountant (
+                school_id,
+                full_name,
+                mobile,
+                user_id,
+                password,
+                is_active,
+                created_ts
+            )
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                1,
+                CURRENT_TIMESTAMP
+            )
+        """, (
+            employee.schoolId,
+            employee.fullName,
+            employee.mobile,
+            employee.userId,
+            stored_password
+        ))
+
+        connection.commit()
+
+        return {
+            "success": True,
+            "message": "Employee created successfully",
+            "employeeId": cursor.lastrowid
+        }
+
+    except Exception as e:
+        connection.rollback()
+
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
+    finally:
+        cursor.close()
+        connection.close()
+
+
+@app.get("/employees")
+def get_employees():
+
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT
+                ua.id,
+                ua.full_name AS fullName,
+                ua.mobile,
+                ua.user_id AS userId,
+                ua.school_id AS schoolId,
+                sm.school_name AS schoolName,
+                ua.is_active AS isActive
+            FROM user_accountant ua
+            LEFT JOIN school_master sm
+                ON sm.id = ua.school_id
+            ORDER BY ua.full_name, ua.id
+        """)
+
+        return cursor.fetchall()
+
     finally:
         cursor.close()
         connection.close()

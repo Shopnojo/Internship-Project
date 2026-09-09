@@ -26,43 +26,50 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.internship.classai.navigation.Routes
 import com.internship.classai.ui.components.AppToolbar
+import com.internship.classai.ui.login.LoginSession
 import com.internship.classai.ui.theme.AppColors
 
 @Composable
 fun ProfileScreen(
     navController: NavHostController
 ) {
+    val context = LocalContext.current
+
+    val session = LoginSession(context)
+
+    val userId = session.getUserId()
+
+    val role = if (session.isAdmin()) {
+        "Administrator"
+    } else {
+        "Employee"
+    }
 
     Scaffold(
-
         topBar = {
 
             AppToolbar(
                 onMenuClick = {
-                    navController.navigate(Routes.SETTINGS)
+                    navController.popBackStack()
                 }
             )
-
-        },
-
-
+        }
 
     ) { innerPadding ->
 
         Column(
-
             modifier = Modifier
                 .fillMaxSize()
                 .background(AppColors.Background)
                 .padding(innerPadding)
                 .padding(20.dp)
-
         ) {
 
             Text(
@@ -91,36 +98,26 @@ fun ProfileScreen(
             //==================================================
 
             Card(
-
                 modifier = Modifier.fillMaxWidth(),
-
                 shape = RoundedCornerShape(18.dp),
-
                 colors = CardDefaults.cardColors(
                     containerColor = AppColors.Surface
                 )
-
             ) {
 
                 Column(
-
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(24.dp),
-
                     horizontalAlignment = Alignment.CenterHorizontally
-
                 ) {
 
                     Box(
-
                         modifier = Modifier
                             .size(80.dp)
                             .clip(CircleShape)
                             .background(AppColors.Background),
-
                         contentAlignment = Alignment.Center
-
                     ) {
 
                         Icon(
@@ -129,7 +126,6 @@ fun ProfileScreen(
                             modifier = Modifier.size(40.dp),
                             tint = AppColors.PrimaryEnd
                         )
-
                     }
 
                     Spacer(
@@ -137,7 +133,9 @@ fun ProfileScreen(
                     )
 
                     Text(
-                        text = "Shopnojo",
+                        text = userId.ifBlank {
+                            "User"
+                        },
                         fontSize = 21.sp,
                         fontWeight = FontWeight.Bold,
                         color = AppColors.TextPrimary
@@ -148,13 +146,11 @@ fun ProfileScreen(
                     )
 
                     Text(
-                        text = "Administrator",
+                        text = role,
                         fontSize = 14.sp,
                         color = AppColors.TextSecondary
                     )
-
                 }
-
             }
 
             Spacer(
@@ -177,46 +173,44 @@ fun ProfileScreen(
             )
 
             Card(
-
                 modifier = Modifier.fillMaxWidth(),
-
                 shape = RoundedCornerShape(16.dp),
-
                 colors = CardDefaults.cardColors(
                     containerColor = AppColors.Surface
                 )
-
             ) {
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(20.dp),
-
                     verticalArrangement = Arrangement.spacedBy(18.dp)
-
                 ) {
+
+                    ProfileInfoRow(
+                        icon = Icons.Outlined.Person,
+                        label = "User ID",
+                        value = userId
+                    )
 
                     ProfileInfoRow(
                         icon = Icons.Outlined.Email,
                         label = "Email",
-                        value = "admin@classai.com"
+                        value = "Not available yet"
                     )
 
                     ProfileInfoRow(
                         icon = Icons.Outlined.Phone,
                         label = "Phone",
-                        value = "+91 XXXXX XXXXX"
+                        value = "Not available yet"
                     )
 
                     ProfileInfoRow(
                         icon = Icons.Outlined.Person,
                         label = "Role",
-                        value = "Administrator"
+                        value = role
                     )
-
                 }
-
             }
 
             Spacer(
@@ -235,34 +229,25 @@ fun ProfileScreen(
             )
 
             Card(
-
                 modifier = Modifier.fillMaxWidth(),
-
                 shape = RoundedCornerShape(16.dp),
-
                 colors = CardDefaults.cardColors(
                     containerColor = AppColors.Surface
                 )
-
             ) {
 
                 Row(
-
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(20.dp),
-
                     verticalAlignment = Alignment.CenterVertically
-
                 ) {
 
                     Box(
-
                         modifier = Modifier
                             .size(10.dp)
                             .clip(CircleShape)
                             .background(AppColors.PrimaryEnd)
-
                     )
 
                     Text(
@@ -272,34 +257,21 @@ fun ProfileScreen(
                         fontWeight = FontWeight.Medium,
                         color = AppColors.TextPrimary
                     )
-
                 }
-
             }
-
         }
-
     }
-
 }
 
 @Composable
 private fun ProfileInfoRow(
-
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-
     label: String,
-
     value: String
-
 ) {
-
     Row(
-
         modifier = Modifier.fillMaxWidth(),
-
         verticalAlignment = Alignment.CenterVertically
-
     ) {
 
         Icon(
@@ -331,9 +303,6 @@ private fun ProfileInfoRow(
                 fontWeight = FontWeight.Medium,
                 color = AppColors.TextPrimary
             )
-
         }
-
     }
-
 }

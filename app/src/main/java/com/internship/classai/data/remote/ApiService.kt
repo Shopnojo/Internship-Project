@@ -2,10 +2,14 @@ package com.internship.classai.data.remote
 
 import com.internship.classai.data.model.ClassItem
 import com.internship.classai.data.model.Due
+import com.internship.classai.data.model.EmployeeCreate
 import com.internship.classai.data.model.PaymentRequest
 import com.internship.classai.data.model.PaymentResponse
+import com.internship.classai.data.model.School
 import com.internship.classai.data.model.SectionItem
 import com.internship.classai.data.model.Student
+import com.internship.classai.data.model.Employee
+
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -31,4 +35,15 @@ interface ApiService {
     suspend fun makePayment(
         @Body request: PaymentRequest
     ): PaymentResponse
+
+    @GET("schools")
+    suspend fun getSchools(): List<School>
+
+    @GET("employees")
+    suspend fun getEmployees(): List<Employee>
+
+    @POST("employees")
+    suspend fun createEmployee(
+        @Body request: EmployeeCreate
+    ): Map<String, Any>
 }
