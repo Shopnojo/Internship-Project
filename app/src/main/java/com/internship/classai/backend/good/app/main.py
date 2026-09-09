@@ -25,6 +25,16 @@ class EmployeeCreate(BaseModel):
     userId: str
     password: str
 
+class AdminCreate(BaseModel):
+    fullName: str
+    mobile: str
+    userId: str
+    password: str
+
+class LoginRequest(BaseModel):
+    userId: str
+    password: str
+    role: str
 
 @app.post("/payments")
 def make_payment(payment: PaymentRequest):
@@ -403,6 +413,240 @@ def get_employees():
         """)
 
         return cursor.fetchall()
+
+    finally:
+        cursor.close()
+        connection.close()
+
+@app.post("/admins")
+def create_admin(admin: AdminCreate):
+
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        # User ID must be unique across both admin and employee accounts.
+        cursor.execute("""
+            SELECT user_id
+            FROM user_admin
+            WHERE user_id = %s
+
+            UNION ALL
+
+            SELECT user_id
+            FROM user_accountant
+            WHERE user_id = %s
+
+            LIMIT 1
+        """, (admin.userId, admin.userId))
+
+        existing_user = cursor.fetchone()
+
+        if existing_user:
+            return {
+                "success": False,
+                "message": "User ID already exists"
+            }
+
+        # Generate a random salt and hash the password.
+        salt = secrets.token_bytes(16)
+
+        password_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            admin.password.encode("utf-8"),
+            salt,
+            100000
+        )
+
+        stored_password = (
+            "pbkdf2_sha256$100000$"
+            + salt.hex()
+            + "$"
+            + password_hash.hex()
+        )
+
+        cursor.execute("""
+            INSERT INTO user_admin (
+                full_name,
+                mobile,
+                user_id,
+                password,
+                is_active,
+                created_ts
+            )
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                1,
+                CURRENT_TIMESTAMP
+            )
+        """, (
+            admin.fullName,
+            admin.mobile,
+            admin.userId,
+            stored_password
+        ))
+
+        connection.commit()
+
+        return {
+            "success": True,
+            "message": "Admin created successfully",
+            "adminId": cursor.lastrowid
+        }
+
+    except Exception as e:
+        connection.rollback()
+
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
+    finally:
+        cursor.close()
+        connection.close()
+
+@app.post("/login")
+def login(request: LoginRequest):
+
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        # ---------------------------------------------------------------
+        # Find the user in the table matching the selected login role.
+        #
+        # Admin    -> user_admin
+        # Employee -> user_accountant
+        #
+        # The backend is the authority for the role.
+        # ---------------------------------------------------------------
+        if request.role == "admin":
+
+            cursor.execute("""
+                SELECT
+                    id,
+                    full_name,
+                    user_id,
+                    password,
+                    is_active
+                FROM user_admin
+                WHERE user_id = %s
+                LIMIT 1
+            """, (request.userId,))
+
+        elif request.role == "employee":
+
+            cursor.execute("""
+                SELECT
+                    ua.id,
+                    ua.full_name,
+                    ua.user_id,
+                    ua.password,
+                    ua.is_active,
+                    sm.is_active AS school_is_active
+                FROM user_accountant ua
+                LEFT JOIN school_master sm
+                    ON sm.id = ua.school_id
+                WHERE ua.user_id = %s
+                LIMIT 1
+            """, (request.userId,))
+
+        else:
+            return {
+                "success": False,
+                "message": "Invalid login role"
+            }
+
+        user = cursor.fetchone()
+
+        if not user:
+            return {
+                "success": False,
+                "message": "Invalid User ID or password"
+            }
+
+        # ---------------------------------------------------------------
+        # Verify account is active.
+        # ---------------------------------------------------------------
+        if int(user["is_active"]) != 1:
+            return {
+                "success": False,
+                "message": "Account is inactive"
+            }
+
+        # ---------------------------------------------------------------
+        # Employee must also belong to an active school.
+        # ---------------------------------------------------------------
+        if request.role == "employee":
+
+            if user["school_is_active"] is None:
+                return {
+                    "success": False,
+                    "message": "Employee school not found"
+                }
+
+            if int(user["school_is_active"]) != 1:
+                return {
+                    "success": False,
+                    "message": "School is inactive"
+                }
+
+        # ---------------------------------------------------------------
+        # Verify PBKDF2 password.
+        #
+        # Stored format:
+        # pbkdf2_sha256$100000$salt$hash
+        # ---------------------------------------------------------------
+        stored_password = user["password"]
+
+        try:
+            algorithm, iterations, salt_hex, stored_hash_hex = (
+                stored_password.split("$")
+            )
+
+            if algorithm != "pbkdf2_sha256":
+                return {
+                    "success": False,
+                    "message": "Invalid account credentials"
+                }
+
+            iterations = int(iterations)
+
+            salt = bytes.fromhex(salt_hex)
+
+            calculated_hash = hashlib.pbkdf2_hmac(
+                "sha256",
+                request.password.encode("utf-8"),
+                salt,
+                iterations
+            )
+
+            if calculated_hash.hex() != stored_hash_hex:
+                return {
+                    "success": False,
+                    "message": "Invalid User ID or password"
+                }
+
+        except Exception:
+            return {
+                "success": False,
+                "message": "Invalid account credentials"
+            }
+
+        # ---------------------------------------------------------------
+        # Successful authentication
+        # ---------------------------------------------------------------
+        return {
+            "success": True,
+            "message": "Login successful",
+            "userId": user["user_id"],
+            "role": request.role,
+            "fullName": user["full_name"]
+        }
 
     finally:
         cursor.close()

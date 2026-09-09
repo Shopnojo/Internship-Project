@@ -9,6 +9,9 @@ import com.internship.classai.data.model.School
 import com.internship.classai.data.model.SectionItem
 import com.internship.classai.data.model.Student
 import com.internship.classai.data.model.Employee
+import com.internship.classai.data.model.AdminCreate
+import com.internship.classai.data.model.LoginRequest
+import com.internship.classai.data.model.LoginResponse
 
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -46,4 +49,14 @@ interface ApiService {
     suspend fun createEmployee(
         @Body request: EmployeeCreate
     ): Map<String, Any>
+
+    @POST("admins")
+    suspend fun createAdmin(
+        @Body request: AdminCreate
+    ): Map<String, Any>
+
+    @POST("login")
+    suspend fun login(
+        @Body request: LoginRequest
+    ): LoginResponse
 }
