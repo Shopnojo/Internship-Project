@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import kotlinx.coroutines.launch
 import com.internship.classai.data.model.Employee
+import com.internship.classai.data.model.EmployeeUpdate
 import com.internship.classai.data.model.School
 import com.internship.classai.data.model.AdminStatusUpdate
 import com.internship.classai.data.remote.RetrofitClient
@@ -279,7 +280,7 @@ private fun EditEmployeeDialog(
     employee: Employee,
     schools: List<School>,
     onDismiss: () -> Unit,
-    onSave: (Map<String, Any?>) -> Unit
+    onSave: (EmployeeUpdate) -> Unit
 ) {
     var fullName by remember(employee.id) { mutableStateOf(employee.fullName) }
     var mobile by remember(employee.id) { mutableStateOf(employee.mobile) }
@@ -361,12 +362,12 @@ private fun EditEmployeeDialog(
             Button(
                 onClick = {
                     val school = selectedSchool ?: return@Button
-                    val request = mutableMapOf<String, Any?>(
-                        "schoolId" to school.id,
-                        "fullName" to fullName.trim(),
-                        "mobile" to mobile,
-                        "userId" to userId.trim(),
-                        "password" to password.ifBlank { null }
+                    val request = EmployeeUpdate(
+                        schoolId = school.id,
+                        fullName = fullName.trim(),
+                        mobile = mobile,
+                        userId = userId.trim(),
+                        password = password.ifBlank { null }
                     )
                     onSave(request)
                 },

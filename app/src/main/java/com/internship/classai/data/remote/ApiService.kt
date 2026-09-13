@@ -7,6 +7,7 @@ import com.internship.classai.data.model.ClassItem
 import com.internship.classai.data.model.Due
 import com.internship.classai.data.model.Employee
 import com.internship.classai.data.model.EmployeeCreate
+import com.internship.classai.data.model.EmployeeUpdate
 import com.internship.classai.data.model.LoginRequest
 import com.internship.classai.data.model.LoginResponse
 import com.internship.classai.data.model.PaymentRequest
@@ -62,7 +63,7 @@ interface ApiService {
     @PATCH("employees/{employee_id}")
     suspend fun updateEmployee(
         @Path("employee_id") employeeId: Int,
-        @Body request: Map<String, Any?>
+        @Body request: EmployeeUpdate
     ): Map<String, Any>
 
     @PATCH("employees/{employee_id}/status")
