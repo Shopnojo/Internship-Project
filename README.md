@@ -277,54 +277,6 @@ It is also hidden from the regular administrator directory.
 
 ---
 
-## 📂 Core Database Structure
-
-### `user_admin`
-
-Stores administrator accounts.
-
-```text
-id
-full_name
-mobile
-user_id
-password
-is_active
-created_by
-created_ts
-```
-
-### `user_accountant`
-
-Stores employee accounts.
-
-```text
-id
-school_id
-full_name
-mobile
-user_id
-password
-is_active
-created_by
-created_ts
-```
-
-### `school_master`
-
-Stores school information and school status.
-
-```text
-id
-school_name
-is_active
-...
-```
-
-The `school_id` relationship connects employees to their respective schools.
-
----
-
 ## 🌐 Backend
 
 The production FastAPI backend is deployed at:
@@ -396,39 +348,6 @@ Remaining work is primarily limited to minor UI/polish changes and project-speci
 
 ---
 
-## 📁 Project Structure
-
-At a high level:
-
-```text
-Internship-Project/
-│
-├── app/
-│   └── src/
-│       └── main/
-│           └── java/
-│               └── com/
-│                   └── internship/
-│                       └── classai/
-│                           ├── backend/
-│                           │   └── good/
-│                           │       └── app/
-│                           │           └── main.py
-│                           │
-│                           ├── data/
-│                           │   └── model/
-│                           │
-│                           ├── repository/
-│                           │
-│                           ├── ui/
-│                           │
-│                           └── ...
-│
-└── README.md
-```
-
----
-
 ## 🚀 Running the Project
 
 ### Android
@@ -445,13 +364,6 @@ Internship-Project/
 The backend is a FastAPI application.
 
 The production backend is already deployed on Render, while the source code is maintained inside the project repository.
-
----
-
-## 🔗 Repository
-
-**GitHub:**  
-https://github.com/Shopnojo/Internship-Project.git
 
 ---
 
