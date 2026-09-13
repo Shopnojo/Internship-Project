@@ -25,16 +25,23 @@ class EmployeeCreate(BaseModel):
     userId: str
     password: str
 
+
 class AdminCreate(BaseModel):
     fullName: str
     mobile: str
     userId: str
     password: str
 
+
+class AdminStatusUpdate(BaseModel):
+    isActive: int
+
+
 class LoginRequest(BaseModel):
     userId: str
     password: str
     role: str
+
 
 @app.post("/payments")
 def make_payment(payment: PaymentRequest):
@@ -42,7 +49,6 @@ def make_payment(payment: PaymentRequest):
     connection = get_db_connection()
     cursor = connection.cursor(dictionary=True)
 
-    # Get the unpaid due and all authoritative financial/payment values
     cursor.execute("""
         SELECT
             id,
@@ -71,7 +77,6 @@ def make_payment(payment: PaymentRequest):
 
     today = date.today()
 
-    # Mark the due as paid
     cursor.execute("""
         UPDATE payment_entries
         SET
@@ -106,17 +111,11 @@ def make_payment(payment: PaymentRequest):
         "message": "Payment recorded successfully",
         "due_id": payment.due_id,
         "student_id": due["student_id"],
-
-        # Exact transaction number supplied by Android
         "transaction_no": payment.transaction_no,
-
-        # Values directly from payment_entries
-        # NULL penalty/waiver are normalized to 0
         "amount": due["amount"],
         "penalty": due["penalty"],
         "waiver": due["waiver"],
         "net_amount": due["net_amount"],
-
         "payment_date": str(today),
         "payment_mode": payment.payment_mode
     }
@@ -286,7 +285,6 @@ def create_employee(employee: EmployeeCreate):
     cursor = connection.cursor(dictionary=True)
 
     try:
-        # Make sure the selected school exists and is active.
         cursor.execute("""
             SELECT
                 id,
@@ -309,7 +307,6 @@ def create_employee(employee: EmployeeCreate):
                 "message": "Selected school is inactive"
             }
 
-        # User ID must be unique among employees.
         cursor.execute("""
             SELECT id
             FROM user_accountant
@@ -325,7 +322,6 @@ def create_employee(employee: EmployeeCreate):
                 "message": "Employee User ID already exists"
             }
 
-        # Generate a random salt and hash the password.
         salt = secrets.token_bytes(16)
 
         password_hash = hashlib.pbkdf2_hmac(
@@ -418,6 +414,11 @@ def get_employees():
         cursor.close()
         connection.close()
 
+
+# ---------------------------------------------------------------------------
+# Admin management
+# ---------------------------------------------------------------------------
+
 @app.post("/admins")
 def create_admin(admin: AdminCreate):
 
@@ -425,6 +426,13 @@ def create_admin(admin: AdminCreate):
     cursor = connection.cursor(dictionary=True)
 
     try:
+        # testadmin is permanently reserved for the SuperAdmin.
+        if admin.userId.strip() == "testadmin":
+            return {
+                "success": False,
+                "message": "This User ID is reserved for the SuperAdmin"
+            }
+
         # User ID must be unique across both admin and employee accounts.
         cursor.execute("""
             SELECT user_id
@@ -448,7 +456,6 @@ def create_admin(admin: AdminCreate):
                 "message": "User ID already exists"
             }
 
-        # Generate a random salt and hash the password.
         salt = secrets.token_bytes(16)
 
         password_hash = hashlib.pbkdf2_hmac(
@@ -509,6 +516,105 @@ def create_admin(admin: AdminCreate):
         cursor.close()
         connection.close()
 
+
+@app.get("/admins")
+def get_admins():
+
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        # testadmin is the protected SuperAdmin and must never
+        # appear in the Administrators directory.
+        cursor.execute("""
+            SELECT
+                id,
+                full_name AS fullName,
+                mobile,
+                user_id AS userId,
+                is_active AS isActive
+            FROM user_admin
+            WHERE user_id <> 'testadmin'
+            ORDER BY full_name, id
+        """)
+
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
+        connection.close()
+
+
+@app.patch("/admins/{admin_id}")
+def update_admin_status(
+    admin_id: int,
+    request: AdminStatusUpdate
+):
+
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT
+                id,
+                user_id
+            FROM user_admin
+            WHERE id = %s
+            LIMIT 1
+        """, (admin_id,))
+
+        admin = cursor.fetchone()
+
+        if not admin:
+            return {
+                "success": False,
+                "message": "Admin not found"
+            }
+
+        # SuperAdmin can never be modified.
+        if admin["user_id"] == "testadmin":
+            return {
+                "success": False,
+                "message": "SuperAdmin cannot be modified"
+            }
+
+        new_status = 1 if int(request.isActive) == 1 else 0
+
+        cursor.execute("""
+            UPDATE user_admin
+            SET is_active = %s
+            WHERE id = %s
+        """, (
+            new_status,
+            admin_id
+        ))
+
+        connection.commit()
+
+        return {
+            "success": True,
+            "message": "Admin status updated successfully",
+            "isActive": new_status
+        }
+
+    except Exception as e:
+        connection.rollback()
+
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
+    finally:
+        cursor.close()
+        connection.close()
+
+
+# ---------------------------------------------------------------------------
+# Login
+# ---------------------------------------------------------------------------
+
 @app.post("/login")
 def login(request: LoginRequest):
 
@@ -516,14 +622,7 @@ def login(request: LoginRequest):
     cursor = connection.cursor(dictionary=True)
 
     try:
-        # ---------------------------------------------------------------
-        # Find the user in the table matching the selected login role.
-        #
-        # Admin    -> user_admin
-        # Employee -> user_accountant
-        #
-        # The backend is the authority for the role.
-        # ---------------------------------------------------------------
+
         if request.role == "admin":
 
             cursor.execute("""
@@ -556,6 +655,7 @@ def login(request: LoginRequest):
             """, (request.userId,))
 
         else:
+
             return {
                 "success": False,
                 "message": "Invalid login role"
@@ -564,51 +664,45 @@ def login(request: LoginRequest):
         user = cursor.fetchone()
 
         if not user:
+
             return {
                 "success": False,
                 "message": "Invalid User ID or password"
             }
 
-        # ---------------------------------------------------------------
-        # Verify account is active.
-        # ---------------------------------------------------------------
         if int(user["is_active"]) != 1:
+
             return {
                 "success": False,
                 "message": "Account is inactive"
             }
 
-        # ---------------------------------------------------------------
-        # Employee must also belong to an active school.
-        # ---------------------------------------------------------------
         if request.role == "employee":
 
             if user["school_is_active"] is None:
+
                 return {
                     "success": False,
                     "message": "Employee school not found"
                 }
 
             if int(user["school_is_active"]) != 1:
+
                 return {
                     "success": False,
                     "message": "School is inactive"
                 }
 
-        # ---------------------------------------------------------------
-        # Verify PBKDF2 password.
-        #
-        # Stored format:
-        # pbkdf2_sha256$100000$salt$hash
-        # ---------------------------------------------------------------
         stored_password = user["password"]
 
         try:
+
             algorithm, iterations, salt_hex, stored_hash_hex = (
                 stored_password.split("$")
             )
 
             if algorithm != "pbkdf2_sha256":
+
                 return {
                     "success": False,
                     "message": "Invalid account credentials"
@@ -626,20 +720,19 @@ def login(request: LoginRequest):
             )
 
             if calculated_hash.hex() != stored_hash_hex:
+
                 return {
                     "success": False,
                     "message": "Invalid User ID or password"
                 }
 
         except Exception:
+
             return {
                 "success": False,
                 "message": "Invalid account credentials"
             }
 
-        # ---------------------------------------------------------------
-        # Successful authentication
-        # ---------------------------------------------------------------
         return {
             "success": True,
             "message": "Login successful",

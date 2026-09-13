@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Badge
-import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Person
@@ -50,6 +49,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.internship.classai.data.model.AdminCreate
 import com.internship.classai.data.model.EmployeeCreate
 import com.internship.classai.data.model.School
 import com.internship.classai.data.remote.RetrofitClient
@@ -66,14 +66,7 @@ fun AddNewUserScreen(
     }
 
     /*
-     * Admin fields
-     */
-    var email by remember {
-        mutableStateOf("")
-    }
-
-    /*
-     * Employee fields
+     * Common user fields
      */
     var fullName by remember {
         mutableStateOf("")
@@ -452,28 +445,28 @@ fun AddNewUserScreen(
                 } else {
 
                     /*
-                     * Admin Email
+                     * Admin Full Name
                      */
                     FieldLabel(
-                        text = "Admin Email ID"
+                        text = "Full Name"
                     )
 
                     OutlinedTextField(
-                        value = email,
+                        value = fullName,
                         onValueChange = {
-                            email = it
+                            fullName = it
                         },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         placeholder = {
                             Text(
-                                text = "admin@classai.edu",
+                                text = "Enter admin name",
                                 fontSize = 13.sp
                             )
                         },
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Outlined.Email,
+                                imageVector = Icons.Outlined.Person,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -484,6 +477,9 @@ fun AddNewUserScreen(
 
                 /*
                  * Phone
+                 *
+                 * Only digits are accepted.
+                 * Maximum length is 10 digits.
                  */
                 FieldLabel(
                     text = "Phone Number"
@@ -491,14 +487,19 @@ fun AddNewUserScreen(
 
                 OutlinedTextField(
                     value = phone,
-                    onValueChange = {
-                        phone = it
+                    onValueChange = { newValue ->
+                        if (
+                            newValue.all { char -> char.isDigit() } &&
+                            newValue.length <= 10
+                        ) {
+                            phone = newValue
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     placeholder = {
                         Text(
-                            text = "+1 (555) 234-5678",
+                            text = "Enter 10-digit phone number",
                             fontSize = 13.sp
                         )
                     },
@@ -513,36 +514,38 @@ fun AddNewUserScreen(
                 )
 
                 /*
-                 * Employee User ID
+                 * User ID
                  */
-                if (!isAdmin) {
-                    FieldLabel(
-                        text = "User ID"
-                    )
+                FieldLabel(
+                    text = "User ID"
+                )
 
-                    OutlinedTextField(
-                        value = userId,
-                        onValueChange = {
-                            userId = it
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        placeholder = {
-                            Text(
-                                text = "Enter employee user ID",
-                                fontSize = 13.sp
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Outlined.Badge,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
+                OutlinedTextField(
+                    value = userId,
+                    onValueChange = {
+                        userId = it
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = {
+                        Text(
+                            text = if (isAdmin) {
+                                "Enter admin user ID"
+                            } else {
+                                "Enter employee user ID"
+                            },
+                            fontSize = 13.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Badge,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                )
 
                 /*
                  * Password
@@ -605,28 +608,14 @@ fun AddNewUserScreen(
                  */
                 Button(
                     onClick = {
-                        if (isAdmin) {
-                            Toast.makeText(
-                                context,
-                                "Admin creation will be connected next",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            return@Button
-                        }
-
-                        if (selectedSchoolId == null) {
-                            Toast.makeText(
-                                context,
-                                "Please select a school",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            return@Button
-                        }
-
                         if (fullName.isBlank()) {
                             Toast.makeText(
                                 context,
-                                "Please enter employee name",
+                                if (isAdmin) {
+                                    "Please enter admin name"
+                                } else {
+                                    "Please enter employee name"
+                                },
                                 Toast.LENGTH_SHORT
                             ).show()
                             return@Button
@@ -636,6 +625,15 @@ fun AddNewUserScreen(
                             Toast.makeText(
                                 context,
                                 "Please enter phone number",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@Button
+                        }
+
+                        if (!phone.matches(Regex("\\d{1,10}"))) {
+                            Toast.makeText(
+                                context,
+                                "Phone number must contain only digits and be at most 10 digits",
                                 Toast.LENGTH_SHORT
                             ).show()
                             return@Button
@@ -659,6 +657,15 @@ fun AddNewUserScreen(
                             return@Button
                         }
 
+                        if (!isAdmin && selectedSchoolId == null) {
+                            Toast.makeText(
+                                context,
+                                "Please select a school",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@Button
+                        }
+
                         if (isLoading) {
                             return@Button
                         }
@@ -667,39 +674,82 @@ fun AddNewUserScreen(
                             isLoading = true
 
                             try {
-                                val response = RetrofitClient.apiService.createEmployee(
-                                    EmployeeCreate(
-                                        schoolId = selectedSchoolId!!,
-                                        fullName = fullName.trim(),
-                                        mobile = phone.trim(),
-                                        userId = userId.trim(),
-                                        password = password
-                                    )
-                                )
+                                if (isAdmin) {
 
-                                val success = response["success"] as? Boolean ?: false
-                                val message =
-                                    response["message"]?.toString()
-                                        ?: "Unknown server response"
+                                    val response =
+                                        RetrofitClient.apiService.createAdmin(
+                                            AdminCreate(
+                                                fullName = fullName.trim(),
+                                                mobile = phone.trim(),
+                                                userId = userId.trim(),
+                                                password = password
+                                            )
+                                        )
 
-                                Toast.makeText(
-                                    context,
-                                    message,
-                                    Toast.LENGTH_LONG
-                                ).show()
+                                    val success =
+                                        response["success"] as? Boolean ?: false
 
-                                if (success) {
-                                    fullName = ""
-                                    userId = ""
-                                    phone = ""
-                                    password = ""
-                                    selectedSchoolId = null
-                                    selectedSchoolName = ""
+                                    val message =
+                                        response["message"]?.toString()
+                                            ?: "Unknown server response"
+
+                                    Toast.makeText(
+                                        context,
+                                        message,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+
+                                    if (success) {
+                                        fullName = ""
+                                        userId = ""
+                                        phone = ""
+                                        password = ""
+                                    }
+
+                                } else {
+
+                                    val response =
+                                        RetrofitClient.apiService.createEmployee(
+                                            EmployeeCreate(
+                                                schoolId = selectedSchoolId!!,
+                                                fullName = fullName.trim(),
+                                                mobile = phone.trim(),
+                                                userId = userId.trim(),
+                                                password = password
+                                            )
+                                        )
+
+                                    val success =
+                                        response["success"] as? Boolean ?: false
+
+                                    val message =
+                                        response["message"]?.toString()
+                                            ?: "Unknown server response"
+
+                                    Toast.makeText(
+                                        context,
+                                        message,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+
+                                    if (success) {
+                                        fullName = ""
+                                        userId = ""
+                                        phone = ""
+                                        password = ""
+                                        selectedSchoolId = null
+                                        selectedSchoolName = ""
+                                    }
                                 }
+
                             } catch (e: Exception) {
                                 Toast.makeText(
                                     context,
-                                    "Failed to create employee: ${e.message}",
+                                    if (isAdmin) {
+                                        "Failed to create admin: ${e.message}"
+                                    } else {
+                                        "Failed to create employee: ${e.message}"
+                                    },
                                     Toast.LENGTH_LONG
                                 ).show()
                             } finally {

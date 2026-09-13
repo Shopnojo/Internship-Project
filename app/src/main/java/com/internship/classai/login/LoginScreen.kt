@@ -2,6 +2,7 @@ package com.internship.classai.ui.login
 
 import android.app.Activity
 import android.graphics.Color as AndroidColor
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,8 +39,11 @@ import androidx.core.view.WindowCompat
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import com.internship.classai.R
+import com.internship.classai.data.model.LoginRequest
+import com.internship.classai.data.remote.RetrofitClient
 import com.internship.classai.navigation.Routes
 import com.internship.classai.ui.theme.AppColors
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
@@ -46,6 +51,7 @@ fun LoginScreen(
     backStackEntry: NavBackStackEntry
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     SideEffect {
         val activity = context as? Activity
@@ -162,29 +168,57 @@ fun LoginScreen(
 
         Button(
             onClick = {
-
-                val session = LoginSession(context)
-
-                session.login(
-                    userId = userId.trim(),
-                    role = if (isAdmin) {
-                        "admin"
-                    } else {
-                        "employee"
-                    }
-                )
-
-                if (isAdmin) {
-                    navController.navigate(Routes.ADMIN) {
-                        popUpTo(Routes.LOGIN_TYPE) {
-                            inclusive = true
+                scope.launch {
+                    try {
+                        val role = if (isAdmin) {
+                            "admin"
+                        } else {
+                            "employee"
                         }
-                    }
-                } else {
-                    navController.navigate(Routes.STUDENTS) {
-                        popUpTo(Routes.LOGIN_TYPE) {
-                            inclusive = true
+
+                        val response = RetrofitClient.apiService.login(
+                            LoginRequest(
+                                userId = userId.trim(),
+                                password = password,
+                                role = role
+                            )
+                        )
+
+                        if (response.success) {
+                            val session = LoginSession(context)
+
+                            session.login(
+                                userId = response.userId ?: userId.trim(),
+                                role = response.role ?: role
+                            )
+
+                            if (isAdmin) {
+                                navController.navigate(Routes.ADMIN) {
+                                    popUpTo(Routes.LOGIN_TYPE) {
+                                        inclusive = true
+                                    }
+                                }
+                            } else {
+                                navController.navigate(Routes.STUDENTS) {
+                                    popUpTo(Routes.LOGIN_TYPE) {
+                                        inclusive = true
+                                    }
+                                }
+                            }
+                        } else {
+                            Toast.makeText(
+                                context,
+                                response.message,
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
+
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            context,
+                            "Unable to sign in. Please try again.",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 }
             },

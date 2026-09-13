@@ -1,20 +1,22 @@
 package com.internship.classai.data.remote
 
+import com.internship.classai.data.model.Admin
+import com.internship.classai.data.model.AdminCreate
+import com.internship.classai.data.model.AdminStatusUpdate
 import com.internship.classai.data.model.ClassItem
 import com.internship.classai.data.model.Due
+import com.internship.classai.data.model.Employee
 import com.internship.classai.data.model.EmployeeCreate
+import com.internship.classai.data.model.LoginRequest
+import com.internship.classai.data.model.LoginResponse
 import com.internship.classai.data.model.PaymentRequest
 import com.internship.classai.data.model.PaymentResponse
 import com.internship.classai.data.model.School
 import com.internship.classai.data.model.SectionItem
 import com.internship.classai.data.model.Student
-import com.internship.classai.data.model.Employee
-import com.internship.classai.data.model.AdminCreate
-import com.internship.classai.data.model.LoginRequest
-import com.internship.classai.data.model.LoginResponse
-
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 
@@ -50,9 +52,18 @@ interface ApiService {
         @Body request: EmployeeCreate
     ): Map<String, Any>
 
+    @GET("admins")
+    suspend fun getAdmins(): List<Admin>
+
     @POST("admins")
     suspend fun createAdmin(
         @Body request: AdminCreate
+    ): Map<String, Any>
+
+    @PATCH("admins/{admin_id}")
+    suspend fun updateAdminStatus(
+        @Path("admin_id") adminId: Int,
+        @Body request: AdminStatusUpdate
     ): Map<String, Any>
 
     @POST("login")
