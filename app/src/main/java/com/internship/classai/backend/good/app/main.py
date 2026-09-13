@@ -37,6 +37,14 @@ class AdminStatusUpdate(BaseModel):
     isActive: int
 
 
+class EmployeeUpdate(BaseModel):
+    schoolId: int
+    fullName: str
+    mobile: str
+    userId: str
+    password: Optional[str] = None
+
+
 class LoginRequest(BaseModel):
     userId: str
     password: str
@@ -307,19 +315,27 @@ def create_employee(employee: EmployeeCreate):
                 "message": "Selected school is inactive"
             }
 
+        # User ID must be unique across both employee and admin accounts.
         cursor.execute("""
-            SELECT id
+            SELECT user_id
+            FROM user_admin
+            WHERE user_id = %s
+
+            UNION ALL
+
+            SELECT user_id
             FROM user_accountant
             WHERE user_id = %s
+
             LIMIT 1
-        """, (employee.userId,))
+        """, (employee.userId, employee.userId))
 
-        existing_employee = cursor.fetchone()
+        existing_user = cursor.fetchone()
 
-        if existing_employee:
+        if existing_user:
             return {
                 "success": False,
-                "message": "Employee User ID already exists"
+                "message": "User ID already exists"
             }
 
         salt = secrets.token_bytes(16)
@@ -413,6 +429,266 @@ def get_employees():
     finally:
         cursor.close()
         connection.close()
+
+
+@app.patch("/employees/{employee_id}")
+def update_employee(
+    employee_id: int,
+    employee: EmployeeUpdate
+):
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT id, user_id, is_active
+            FROM user_accountant
+            WHERE id = %s
+            LIMIT 1
+        """, (employee_id,))
+
+        existing_employee = cursor.fetchone()
+
+        if not existing_employee:
+            return {
+                "success": False,
+                "message": "Employee not found"
+            }
+
+        cursor.execute("""
+            SELECT id, is_active
+            FROM school_master
+            WHERE id = %s
+            LIMIT 1
+        """, (employee.schoolId,))
+
+        school = cursor.fetchone()
+
+        if not school:
+            return {
+                "success": False,
+                "message": "School not found"
+            }
+
+        if int(school["is_active"]) != 1:
+            return {
+                "success": False,
+                "message": "Selected school is inactive"
+            }
+
+        # User ID uniqueness is global across admins and employees, excluding
+        # the employee currently being edited.
+        cursor.execute("""
+            SELECT user_id
+            FROM user_admin
+            WHERE user_id = %s
+
+            UNION ALL
+
+            SELECT user_id
+            FROM user_accountant
+            WHERE user_id = %s
+              AND id <> %s
+
+            LIMIT 1
+        """, (employee.userId, employee.userId, employee_id))
+
+        existing_user = cursor.fetchone()
+
+        if existing_user:
+            return {
+                "success": False,
+                "message": "User ID already exists"
+            }
+
+        if employee.password and employee.password.strip():
+            salt = secrets.token_bytes(16)
+            password_hash = hashlib.pbkdf2_hmac(
+                "sha256",
+                employee.password.encode("utf-8"),
+                salt,
+                100000
+            )
+            stored_password = (
+                "pbkdf2_sha256$100000$"
+                + salt.hex()
+                + "$"
+                + password_hash.hex()
+            )
+
+            cursor.execute("""
+                UPDATE user_accountant
+                SET school_id = %s,
+                    full_name = %s,
+                    mobile = %s,
+                    user_id = %s,
+                    password = %s
+                WHERE id = %s
+            """, (
+                employee.schoolId,
+                employee.fullName,
+                employee.mobile,
+                employee.userId,
+                stored_password,
+                employee_id
+            ))
+        else:
+            cursor.execute("""
+                UPDATE user_accountant
+                SET school_id = %s,
+                    full_name = %s,
+                    mobile = %s,
+                    user_id = %s
+                WHERE id = %s
+            """, (
+                employee.schoolId,
+                employee.fullName,
+                employee.mobile,
+                employee.userId,
+                employee_id
+            ))
+
+        connection.commit()
+
+        return {
+            "success": True,
+            "message": "Employee updated successfully"
+        }
+
+    except Exception as e:
+        connection.rollback()
+        return {
+            "success": False,
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+        connection.close()
+
+
+@app.patch("/employees/{employee_id}/status")
+def update_employee_status(
+    employee_id: int,
+    request: AdminStatusUpdate
+):
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT
+                ua.id,
+                ua.is_active,
+                sm.is_active AS school_is_active
+            FROM user_accountant ua
+            LEFT JOIN school_master sm
+                ON sm.id = ua.school_id
+            WHERE ua.id = %s
+            LIMIT 1
+        """, (employee_id,))
+
+        employee = cursor.fetchone()
+
+        if not employee:
+            return {
+                "success": False,
+                "message": "Employee not found"
+            }
+
+        new_status = 1 if int(request.isActive) == 1 else 0
+
+        if new_status == 1 and (
+            employee["school_is_active"] is None
+            or int(employee["school_is_active"]) != 1
+        ):
+            return {
+                "success": False,
+                "message": "Employee cannot be activated while the school is inactive"
+            }
+
+        cursor.execute("""
+            UPDATE user_accountant
+            SET is_active = %s
+            WHERE id = %s
+        """, (new_status, employee_id))
+
+        connection.commit()
+
+        return {
+            "success": True,
+            "message": "Employee status updated successfully",
+            "isActive": new_status
+        }
+
+    except Exception as e:
+        connection.rollback()
+        return {
+            "success": False,
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+        connection.close()
+
+
+@app.patch("/schools/{school_id}/status")
+def update_school_status(
+    school_id: int,
+    request: AdminStatusUpdate
+):
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT id, is_active
+            FROM school_master
+            WHERE id = %s
+            LIMIT 1
+        """, (school_id,))
+
+        school = cursor.fetchone()
+
+        if not school:
+            return {
+                "success": False,
+                "message": "School not found"
+            }
+
+        new_status = 1 if int(request.isActive) == 1 else 0
+
+        cursor.execute("""
+            UPDATE school_master
+            SET is_active = %s
+            WHERE id = %s
+        """, (new_status, school_id))
+
+        # School status controls all employees belonging to that school.
+        # Deactivation disables every employee; reactivation restores them.
+        cursor.execute("""
+            UPDATE user_accountant
+            SET is_active = %s
+            WHERE school_id = %s
+        """, (new_status, school_id))
+
+        connection.commit()
+
+        return {
+            "success": True,
+            "message": "School status updated successfully",
+            "isActive": new_status
+        }
+
+    except Exception as e:
+        connection.rollback()
+        return {
+            "success": False,
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+        connection.close()
+
 
 
 # ---------------------------------------------------------------------------
@@ -604,6 +880,79 @@ def update_admin_status(
         return {
             "success": False,
             "message": str(e)
+        }
+
+    finally:
+        cursor.close()
+        connection.close()
+
+
+@app.get("/profile")
+def get_profile(user_id: str, role: str):
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        if role == "admin":
+            cursor.execute("""
+                SELECT
+                    ua.full_name AS fullName,
+                    ua.user_id AS userId,
+                    ua.mobile,
+                    ua.is_active AS isActive
+                FROM user_admin ua
+                WHERE ua.user_id = %s
+                LIMIT 1
+            """, (user_id,))
+
+            user = cursor.fetchone()
+
+            if not user:
+                return {
+                    "success": False,
+                    "message": "Profile not found"
+                }
+
+            user["role"] = "Administrator"
+            user["schoolName"] = ""
+            return {
+                "success": True,
+                **user
+            }
+
+        if role == "employee":
+            cursor.execute("""
+                SELECT
+                    ua.full_name AS fullName,
+                    ua.user_id AS userId,
+                    ua.mobile,
+                    ua.is_active AS isActive,
+                    sm.school_name AS schoolName,
+                    sm.is_active AS schoolIsActive
+                FROM user_accountant ua
+                LEFT JOIN school_master sm
+                    ON sm.id = ua.school_id
+                WHERE ua.user_id = %s
+                LIMIT 1
+            """, (user_id,))
+
+            user = cursor.fetchone()
+
+            if not user:
+                return {
+                    "success": False,
+                    "message": "Profile not found"
+                }
+
+            user["role"] = "Employee"
+            return {
+                "success": True,
+                **user
+            }
+
+        return {
+            "success": False,
+            "message": "Invalid profile role"
         }
 
     finally:

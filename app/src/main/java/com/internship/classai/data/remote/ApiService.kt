@@ -19,6 +19,7 @@ import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ApiService {
 
@@ -44,12 +45,30 @@ interface ApiService {
     @GET("schools")
     suspend fun getSchools(): List<School>
 
+    @PATCH("schools/{school_id}/status")
+    suspend fun updateSchoolStatus(
+        @Path("school_id") schoolId: Int,
+        @Body request: AdminStatusUpdate
+    ): Map<String, Any>
+
     @GET("employees")
     suspend fun getEmployees(): List<Employee>
 
     @POST("employees")
     suspend fun createEmployee(
         @Body request: EmployeeCreate
+    ): Map<String, Any>
+
+    @PATCH("employees/{employee_id}")
+    suspend fun updateEmployee(
+        @Path("employee_id") employeeId: Int,
+        @Body request: Map<String, Any?>
+    ): Map<String, Any>
+
+    @PATCH("employees/{employee_id}/status")
+    suspend fun updateEmployeeStatus(
+        @Path("employee_id") employeeId: Int,
+        @Body request: AdminStatusUpdate
     ): Map<String, Any>
 
     @GET("admins")
@@ -65,6 +84,12 @@ interface ApiService {
         @Path("admin_id") adminId: Int,
         @Body request: AdminStatusUpdate
     ): Map<String, Any>
+
+    @GET("profile")
+    suspend fun getProfile(
+        @Query("user_id") userId: String,
+        @Query("role") role: String
+    ): Map<String, Any?>
 
     @POST("login")
     suspend fun login(
