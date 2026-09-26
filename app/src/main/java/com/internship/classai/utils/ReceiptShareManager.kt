@@ -258,12 +258,12 @@ object ReceiptShareManager {
             )
 
             drawText(
-                "Penalty: ₹0",
+                "Penalty: ₹${payment.penalty}",
                 13f
             )
 
             drawText(
-                "Waiver: ₹0",
+                "Waiver: ₹${payment.waiver}",
                 13f
             )
 
@@ -285,7 +285,7 @@ object ReceiptShareManager {
             paint.typeface = Typeface.DEFAULT_BOLD
 
             canvas.drawText(
-                "₹${payment.amountPaid}",
+                "₹${payment.netAmount}",
                 50f,
                 y,
                 paint
