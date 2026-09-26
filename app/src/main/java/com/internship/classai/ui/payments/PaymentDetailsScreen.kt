@@ -1,6 +1,7 @@
 package com.internship.classai.ui.payments
 
 import android.app.DatePickerDialog
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +79,7 @@ fun PaymentDetailsScreen(
     }
 
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val className =
         paymentViewModel.classes.firstOrNull {
@@ -516,6 +519,15 @@ fun PaymentDetailsScreen(
                             navController.navigate(
                                 Routes.RECEIPT_PREVIEW
                             )
+
+                        } else {
+
+                            Toast.makeText(
+                                context,
+                                paymentViewModel.lastPaymentError
+                                    ?: "Payment could not be recorded",
+                                Toast.LENGTH_LONG
+                            ).show()
 
                         }
 
