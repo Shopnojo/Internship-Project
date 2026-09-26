@@ -20,6 +20,7 @@ class PaymentRequest(BaseModel):
     due_id: int
     payment_mode: str
     transaction_no: Optional[str] = None
+    payment_date: Optional[str] = None
     remarks: Optional[str] = None
 
 
