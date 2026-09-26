@@ -1,13 +1,9 @@
 import hashlib
 import secrets
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.request import Request, build_opener, HTTPRedirectHandler
-
 from fastapi import FastAPI
 from database import get_db_connection
 
-from datetime import date
+from datetime import date, datetime
 from pydantic import BaseModel
 from typing import Optional
 
@@ -62,19 +58,51 @@ class LoginRequest(BaseModel):
 
 @app.post("/payments")
 def make_payment(payment: PaymentRequest):
-    """Confirm a payment through the parent website's existing payment flow.
+    """Record a payment directly in the shared MySQL database.
 
-    The parent website owns receipt generation/storage. This endpoint therefore
-    does not generate or store a second PDF on Render. It calls the same
-    /submit-payment endpoint used by the website, then reads the resulting
-    payment record back from the shared database so the Android app receives
-    the website-generated transaction/receipt values.
+    The Android app is the source of the receipt UI for this flow. The backend
+    owns the authoritative payment write and returns the committed values so
+    Android can build the receipt only after the database transaction succeeds.
     """
 
     connection = get_db_connection()
     cursor = connection.cursor(dictionary=True)
 
     try:
+        payment_mode = (payment.payment_mode or "").strip().upper()
+
+        if not payment_mode:
+            return {
+                "success": False,
+                "message": "Payment mode is required"
+            }
+
+        # Android sends the selected date as "dd MMM yyyy". Keep the DB and
+        # the receipt aligned with the date the accountant selected.
+        if payment.payment_date:
+            try:
+                payment_date = datetime.strptime(
+                    payment.payment_date.strip(),
+                    "%d %b %Y"
+                ).date()
+            except ValueError:
+                return {
+                    "success": False,
+                    "message": "Invalid payment date"
+                }
+        else:
+            payment_date = date.today()
+
+        transaction_no = (
+            payment.transaction_no.strip()
+            if payment.transaction_no and payment.transaction_no.strip()
+            else f"TXN-{int(datetime.now().timestamp() * 1000)}"
+        )
+
+        # Lock the unpaid row so two requests cannot successfully collect the
+        # same due at the same time.
+        connection.start_transaction()
+
         cursor.execute("""
             SELECT
                 id,
@@ -88,67 +116,50 @@ def make_payment(payment: PaymentRequest):
               AND is_paid = 0
               AND payment_date IS NULL
             LIMIT 1
+            FOR UPDATE
         """, (payment.due_id,))
 
         due = cursor.fetchone()
 
         if not due:
+            connection.rollback()
             return {
                 "success": False,
                 "message": "Due not found or already paid"
             }
 
-        today = date.today()
-        payment_mode = (payment.payment_mode or "").strip().upper()
+        # The database values remain authoritative. Android never supplies
+        # amount, penalty, waiver, or net_amount.
+        cursor.execute("""
+            UPDATE payment_entries
+            SET
+                payment_date = %s,
+                payment_mode = %s,
+                transaction_no = %s,
+                receipt_no = %s,
+                receipt_date = %s,
+                is_paid = 1
+            WHERE id = %s
+              AND is_paid = 0
+              AND payment_date IS NULL
+        """, (
+            payment_date,
+            payment_mode,
+            transaction_no,
+            transaction_no,
+            payment_date,
+            payment.due_id
+        ))
 
-        if not payment_mode:
+        if cursor.rowcount != 1:
+            connection.rollback()
             return {
                 "success": False,
-                "message": "Payment mode is required"
+                "message": "Payment could not be recorded"
             }
 
-        form_data = urlencode({
-            "payment_id": str(payment.due_id),
-            "payment_date": today.isoformat(),
-            "payment_mode": payment_mode,
-            "remarks": payment.remarks or "",
-        }).encode("utf-8")
-
-        request = Request(
-            PARENT_PAYMENT_ENDPOINT,
-            data=form_data,
-            method="POST",
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "ClassAI-Backend/1.0",
-                "Origin": PARENT_WEBSITE_BASE_URL,
-                "Referer": f"{PARENT_WEBSITE_BASE_URL}/offline-payment",
-            },
-        )
-
-        class _NoRedirect(HTTPRedirectHandler):
-            def redirect_request(self, req, fp, code, msg, headers, newurl):
-                return None
-
-        opener = build_opener(_NoRedirect)
-        website_status = None
-        website_error = None
-
-        try:
-            with opener.open(request, timeout=20) as response:
-                website_status = response.status
-        except HTTPError as exc:
-            # The website deliberately returns 303 after successful payment
-            # confirmation, so 3xx is handled as a successful submission.
-            website_status = exc.code
-            if not (300 <= exc.code < 400):
-                website_error = f"Parent website returned HTTP {exc.code}"
-        except (URLError, TimeoutError) as exc:
-            website_error = f"Could not reach parent website: {exc}"
-
-        # If the request itself failed, verify the shared DB once before
-        # reporting failure. This protects against a timeout after the website
-        # already committed the payment.
+        # Read the committed payment values from the same transaction before
+        # committing, so the response exactly matches what is being stored.
         cursor.execute("""
             SELECT
                 id,
@@ -169,42 +180,17 @@ def make_payment(payment: PaymentRequest):
             WHERE id = %s
             LIMIT 1
         """, (payment.due_id,))
+
         paid = cursor.fetchone()
 
-        if website_error and not (
-            paid
-            and int(paid.get("is_paid") or 0) == 1
-            and paid.get("receipt")
-        ):
-            return {
-                "success": False,
-                "message": website_error
-            }
-
-        if website_status is not None and not (200 <= website_status < 400):
-            return {
-                "success": False,
-                "message": f"Parent website returned HTTP {website_status}"
-            }
-
         if not paid or int(paid.get("is_paid") or 0) != 1:
+            connection.rollback()
             return {
                 "success": False,
-                "message": "Parent website did not confirm the payment"
+                "message": "Payment verification failed"
             }
 
-        receipt_path = paid.get("receipt")
-        if not receipt_path:
-            return {
-                "success": False,
-                "message": "Payment was confirmed but the website did not create a receipt"
-            }
-
-        receipt_url = receipt_path
-        if receipt_path.startswith("http://") or receipt_path.startswith("https://"):
-            receipt_url = receipt_path
-        else:
-            receipt_url = f"{PARENT_WEBSITE_BASE_URL}/{receipt_path.lstrip('/')}"
+        connection.commit()
 
         return {
             "success": True,
@@ -221,8 +207,18 @@ def make_payment(payment: PaymentRequest):
             "bill_no": paid.get("bill_no"),
             "receipt_no": paid.get("receipt_no"),
             "receipt_date": str(paid["receipt_date"]) if paid.get("receipt_date") else None,
-            "receipt": receipt_path,
-            "receipt_url": receipt_url,
+            "receipt": paid.get("receipt"),
+        }
+
+    except Exception as e:
+        try:
+            connection.rollback()
+        except Exception:
+            pass
+
+        return {
+            "success": False,
+            "message": f"Payment recording failed: {e}"
         }
 
     finally:
