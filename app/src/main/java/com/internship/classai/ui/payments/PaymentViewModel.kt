@@ -46,6 +46,9 @@ class PaymentViewModel : ViewModel() {
     var lastPayment by mutableStateOf<PaymentRecord?>(null)
         private set
 
+    var lastPaymentError by mutableStateOf<String?>(null)
+        private set
+
     // --------------------------------------------------
     // SELECTED CLASS
     // --------------------------------------------------
@@ -447,6 +450,8 @@ class PaymentViewModel : ViewModel() {
 
         return try {
 
+            lastPaymentError = null
+
             // Generate the transaction number ONCE.
             // This exact value is sent to the database
             // and subsequently used as the receipt number.
@@ -465,11 +470,18 @@ class PaymentViewModel : ViewModel() {
                     transactionNo =
                         transactionNo,
 
+                    paymentDate =
+                        paymentDate,
+
                     remarks =
                         remarks
                 )
 
             if (!response.success) {
+                lastPaymentError =
+                    response.message.ifBlank {
+                        "Payment could not be recorded"
+                    }
                 return false
             }
 
@@ -595,6 +607,9 @@ class PaymentViewModel : ViewModel() {
             // the problem.
 
             e.printStackTrace()
+
+            lastPaymentError =
+                e.message ?: "Payment could not be recorded"
 
             false
         }
