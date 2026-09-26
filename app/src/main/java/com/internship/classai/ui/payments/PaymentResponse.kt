@@ -11,5 +11,9 @@ data class PaymentResponse(
     val waiver: Int? = null,
     val net_amount: Int? = null,
     val payment_date: String? = null,
-    val payment_mode: String? = null
+    val payment_mode: String? = null,
+    val bill_no: String? = null,
+    val receipt_no: String? = null,
+    val receipt_date: String? = null,
+    val receipt: String? = null
 )

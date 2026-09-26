@@ -1,9 +1,5 @@
 import hashlib
 import secrets
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.request import Request, build_opener, HTTPRedirectHandler
-
 from fastapi import FastAPI
 from database import get_db_connection
 
@@ -12,13 +8,6 @@ from pydantic import BaseModel
 from typing import Optional
 
 app = FastAPI()
-
-# The parent website already has its own payment-confirmation and receipt
-# generation flow. ClassAI calls that existing endpoint instead of generating
-# a second receipt on Render.
-PARENT_WEBSITE_BASE_URL = "https://classai.fixmyneed.in"
-PARENT_PAYMENT_ENDPOINT = f"{PARENT_WEBSITE_BASE_URL}/submit-payment"
-
 
 class PaymentRequest(BaseModel):
     due_id: int
@@ -62,13 +51,11 @@ class LoginRequest(BaseModel):
 
 @app.post("/payments")
 def make_payment(payment: PaymentRequest):
-    """Confirm a payment through the parent website's existing payment flow.
+    """Legacy backend payment endpoint kept for compatibility.
 
-    The parent website owns receipt generation/storage. This endpoint therefore
-    does not generate or store a second PDF on Render. It calls the same
-    /submit-payment endpoint used by the website, then reads the resulting
-    payment record back from the shared database so the Android app receives
-    the website-generated transaction/receipt values.
+    The Android app now confirms the payment through the parent website's
+    existing /submit-payment endpoint first. This endpoint remains available
+    for existing callers and preserves the original ClassAI DB payment flow.
     """
 
     connection = get_db_connection()
@@ -99,56 +86,67 @@ def make_payment(payment: PaymentRequest):
             }
 
         today = date.today()
-        payment_mode = (payment.payment_mode or "").strip().upper()
 
-        if not payment_mode:
-            return {
-                "success": False,
-                "message": "Payment mode is required"
-            }
+        cursor.execute("""
+            UPDATE payment_entries
+            SET
+                payment_date = %s,
+                payment_confirm_date = %s,
+                payment_recieve_date = %s,
+                payment_mode = %s,
+                transaction_no = %s,
+                remarks = %s,
+                is_paid = 1,
+                receipt_date = %s,
+                updated_ts = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (
+            today,
+            today,
+            today,
+            payment.payment_mode,
+            payment.transaction_no,
+            payment.remarks,
+            today,
+            payment.due_id
+        ))
 
-        form_data = urlencode({
-            "payment_id": str(payment.due_id),
-            "payment_date": today.isoformat(),
-            "payment_mode": payment_mode,
-            "remarks": payment.remarks or "",
-        }).encode("utf-8")
+        connection.commit()
 
-        request = Request(
-            PARENT_PAYMENT_ENDPOINT,
-            data=form_data,
-            method="POST",
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "ClassAI-Backend/1.0",
-                "Origin": PARENT_WEBSITE_BASE_URL,
-                "Referer": f"{PARENT_WEBSITE_BASE_URL}/offline-payment",
-            },
-        )
+        return {
+            "success": True,
+            "message": "Payment recorded successfully",
+            "due_id": payment.due_id,
+            "student_id": due["student_id"],
+            "transaction_no": payment.transaction_no,
+            "amount": due["amount"],
+            "penalty": due["penalty"],
+            "waiver": due["waiver"],
+            "net_amount": due["net_amount"],
+            "payment_date": str(today),
+            "payment_mode": payment.payment_mode
+        }
 
-        class _NoRedirect(HTTPRedirectHandler):
-            def redirect_request(self, req, fp, code, msg, headers, newurl):
-                return None
+    except Exception as e:
+        connection.rollback()
+        return {
+            "success": False,
+            "message": str(e)
+        }
 
-        opener = build_opener(_NoRedirect)
-        website_status = None
-        website_error = None
+    finally:
+        cursor.close()
+        connection.close()
 
-        try:
-            with opener.open(request, timeout=20) as response:
-                website_status = response.status
-        except HTTPError as exc:
-            # The website deliberately returns 303 after successful payment
-            # confirmation, so 3xx is handled as a successful submission.
-            website_status = exc.code
-            if not (300 <= exc.code < 400):
-                website_error = f"Parent website returned HTTP {exc.code}"
-        except (URLError, TimeoutError) as exc:
-            website_error = f"Could not reach parent website: {exc}"
 
-        # If the request itself failed, verify the shared DB once before
-        # reporting failure. This protects against a timeout after the website
-        # already committed the payment.
+@app.get("/payments/{payment_id}")
+def get_confirmed_payment(payment_id: int):
+    """Return the payment record after the parent website confirms it."""
+
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    try:
         cursor.execute("""
             SELECT
                 id,
@@ -168,61 +166,38 @@ def make_payment(payment: PaymentRequest):
             FROM payment_entries
             WHERE id = %s
             LIMIT 1
-        """, (payment.due_id,))
-        paid = cursor.fetchone()
+        """, (payment_id,))
 
-        if website_error and not (
-            paid
-            and int(paid.get("is_paid") or 0) == 1
-            and paid.get("receipt")
-        ):
+        payment = cursor.fetchone()
+
+        if not payment or int(payment.get("is_paid") or 0) != 1:
             return {
                 "success": False,
-                "message": website_error
+                "message": "Payment has not been confirmed"
             }
 
-        if website_status is not None and not (200 <= website_status < 400):
+        if not payment.get("receipt"):
             return {
                 "success": False,
-                "message": f"Parent website returned HTTP {website_status}"
+                "message": "Payment was confirmed but the website receipt is not available yet"
             }
-
-        if not paid or int(paid.get("is_paid") or 0) != 1:
-            return {
-                "success": False,
-                "message": "Parent website did not confirm the payment"
-            }
-
-        receipt_path = paid.get("receipt")
-        if not receipt_path:
-            return {
-                "success": False,
-                "message": "Payment was confirmed but the website did not create a receipt"
-            }
-
-        receipt_url = receipt_path
-        if receipt_path.startswith("http://") or receipt_path.startswith("https://"):
-            receipt_url = receipt_path
-        else:
-            receipt_url = f"{PARENT_WEBSITE_BASE_URL}/{receipt_path.lstrip('/')}"
 
         return {
             "success": True,
             "message": "Payment recorded successfully",
-            "due_id": payment.due_id,
-            "student_id": paid["student_id"],
-            "transaction_no": paid.get("transaction_no"),
-            "amount": paid["amount"],
-            "penalty": paid["penalty"],
-            "waiver": paid["waiver"],
-            "net_amount": paid["net_amount"],
-            "payment_date": str(paid["payment_date"]) if paid.get("payment_date") else None,
-            "payment_mode": paid.get("payment_mode"),
-            "bill_no": paid.get("bill_no"),
-            "receipt_no": paid.get("receipt_no"),
-            "receipt_date": str(paid["receipt_date"]) if paid.get("receipt_date") else None,
-            "receipt": receipt_path,
-            "receipt_url": receipt_url,
+            "due_id": payment["id"],
+            "student_id": payment["student_id"],
+            "transaction_no": payment.get("transaction_no"),
+            "amount": payment["amount"],
+            "penalty": payment["penalty"],
+            "waiver": payment["waiver"],
+            "net_amount": payment["net_amount"],
+            "payment_date": str(payment["payment_date"]) if payment.get("payment_date") else None,
+            "payment_mode": payment.get("payment_mode"),
+            "bill_no": payment.get("bill_no"),
+            "receipt_no": payment.get("receipt_no"),
+            "receipt_date": str(payment["receipt_date"]) if payment.get("receipt_date") else None,
+            "receipt": payment.get("receipt")
         }
 
     finally:
