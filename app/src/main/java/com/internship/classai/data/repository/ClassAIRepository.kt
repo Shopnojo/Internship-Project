@@ -33,23 +33,4 @@ class ClassAIRepository(
                 remarks = remarks
             )
         )
-
-    suspend fun submitParentPayment(
-        dueId: Int,
-        paymentDate: String,
-        paymentMode: String,
-        remarks: String
-    ) =
-        apiService.submitParentPayment(
-            url = "https://classai.fixmyneed.in/submit-payment",
-            paymentId = dueId,
-            paymentDate = paymentDate,
-            paymentMode = paymentMode,
-            remarks = remarks
-        )
-
-    suspend fun getConfirmedPayment(
-        paymentId: Int
-    ) =
-        apiService.getConfirmedPayment(paymentId)
 }
