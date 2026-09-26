@@ -9,12 +9,6 @@ from typing import Optional
 
 app = FastAPI()
 
-# The parent website already has its own payment-confirmation and receipt
-# generation flow. ClassAI calls that existing endpoint instead of generating
-# a second receipt on Render.
-PARENT_WEBSITE_BASE_URL = "https://classai.fixmyneed.in"
-PARENT_PAYMENT_ENDPOINT = f"{PARENT_WEBSITE_BASE_URL}/submit-payment"
-
 
 class PaymentRequest(BaseModel):
     due_id: int
@@ -82,10 +76,26 @@ def make_payment(payment: PaymentRequest):
         # the receipt aligned with the date the accountant selected.
         if payment.payment_date:
             try:
-                payment_date = datetime.strptime(
-                    payment.payment_date.strip(),
-                    "%d %b %Y"
-                ).date()
+                payment_date_text = payment.payment_date.strip()
+                payment_date = None
+
+                for date_format in (
+                    "%d %b %Y",
+                    "%d %B %Y",
+                    "%d Sept %Y",
+                    "%Y-%m-%d",
+                ):
+                    try:
+                        payment_date = datetime.strptime(
+                            payment_date_text,
+                            date_format
+                        ).date()
+                        break
+                    except ValueError:
+                        continue
+
+                if payment_date is None:
+                    raise ValueError
             except ValueError:
                 return {
                     "success": False,
