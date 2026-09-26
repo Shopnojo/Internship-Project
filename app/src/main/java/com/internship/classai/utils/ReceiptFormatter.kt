@@ -32,14 +32,16 @@ object ReceiptFormatter {
         sb.append("--------------------------------\n")
 
         sb.append("Fee Month  : ${payment.month}\n")
-        sb.append("Amount     : ₹${payment.amountPaid}\n")
+        sb.append("Payable    : ₹${payment.amountPaid}\n")
+        sb.append("Penalty    : ₹${payment.penalty}\n")
+        sb.append("Waiver     : ₹${payment.waiver}\n")
         sb.append("Method     : ${payment.paymentMethod}\n")
 
         sb.append("--------------------------------\n")
 
         sb.append(center("TOTAL PAID"))
         sb.append("\n")
-        sb.append(center("₹${payment.amountPaid}"))
+        sb.append(center("₹${payment.netAmount}"))
         sb.append("\n")
 
         sb.append("--------------------------------\n")
