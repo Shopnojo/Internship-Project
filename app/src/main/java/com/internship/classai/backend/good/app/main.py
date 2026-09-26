@@ -1,5 +1,8 @@
 import hashlib
 import secrets
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from fastapi import FastAPI
 from database import get_db_connection
 
@@ -112,6 +115,46 @@ def make_payment(payment: PaymentRequest):
         ))
 
         connection.commit()
+
+        # Keep the existing ClassAI payment flow intact. After the payment is
+        # already committed, ask the unchanged parent website to run its own
+        # receipt-generation flow. A failure here must never make a successful
+        # ClassAI payment fail.
+        try:
+            form_data = urlencode({
+                "payment_id": str(payment.due_id),
+                "payment_date": today.isoformat(),
+                "payment_mode": payment.payment_mode,
+                "remarks": payment.remarks or "",
+            }).encode("utf-8")
+
+            website_request = Request(
+                "https://classai.fixmyneed.in/submit-payment",
+                data=form_data,
+                method="POST",
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": "ClassAI-Backend/1.0",
+                },
+            )
+
+            try:
+                with urlopen(website_request, timeout=20) as website_response:
+                    website_status = website_response.status
+            except HTTPError as exc:
+                website_status = exc.code
+
+            if not (200 <= website_status < 400):
+                print(
+                    f"Website receipt generation returned HTTP {website_status} "
+                    f"for payment {payment.due_id}"
+                )
+
+        except (URLError, TimeoutError, OSError) as exc:
+            print(
+                f"Website receipt generation failed for payment "
+                f"{payment.due_id}: {exc}"
+            )
 
         return {
             "success": True,
