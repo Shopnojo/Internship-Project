@@ -23,6 +23,7 @@ class ClassAIRepository(
         dueId: Int,
         paymentMode: String,
         transactionNo: String?,
+        paymentDate: String?,
         remarks: String?
     ) =
         apiService.makePayment(
@@ -30,6 +31,7 @@ class ClassAIRepository(
                 due_id = dueId,
                 payment_mode = paymentMode,
                 transaction_no = transactionNo,
+                payment_date = paymentDate,
                 remarks = remarks
             )
         )
